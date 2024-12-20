@@ -6,9 +6,9 @@ struct Array {
 };
 
 template<typename T>
-T* alloc(Array<T>* allocator){
+T* alloc(Array<T>* allocator, unsigned n = 1){
   T* x = allocator->mem + allocator->size;
-  allocator->size++;
+  allocator->size += n;
   return x;
 }
 

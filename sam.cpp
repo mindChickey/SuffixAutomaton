@@ -1,28 +1,11 @@
 
-#include <cctype>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "utils.h"
+#include "sam.h"
 
-struct Node {
-  char transit;
-  unsigned len;
-  struct Node* parent;
-  List<Node*>* edges;
-};
-
-using PNode = Node*;
-using PEdge = List<PNode>*;
-
-struct Sem {
-  Array<Node> nodes;
-  Array<List<PNode>> edges;
-  PNode lastRealNode;
-};
-
-unsigned getNodeIndex(Sem* sem, PNode node){
-  return node - sem->nodes.mem;
+unsigned getNodeIndex(Sam* sam, PNode node){
+  return node - sam->nodes.mem;
 }
 
 PEdge transfer(PNode srcNode, char c){
@@ -32,20 +15,20 @@ PEdge transfer(PNode srcNode, char c){
   return nullptr;
 }
 
-PNode insertRightPath(Sem* sem, PNode p, PNode node, char c){
+PNode insertRightPath(Sam* sam, PNode p, PNode node, char c){
   while(p != nullptr && transfer(p, c) == nullptr){
-    p->edges = cons(&sem->edges, node, p->edges);
-    printf("insert [%u][%c] = %u\n", getNodeIndex(sem, p), c, getNodeIndex(sem, node));
+    p->edges = cons(&sam->edges, node, p->edges);
+    printf("insert [%u][%c] = %u\n", getNodeIndex(sam, p), c, getNodeIndex(sam, node));
     p = p->parent;
   }
   return p;
 }
 
-PNode replaceRightPath(Sem* sem, PNode p, PNode e, PNode node, char c){
+PNode replaceRightPath(Sam* sam, PNode p, PNode e, PNode node, char c){
   PEdge edge = transfer(p, c);
   while(edge->data == e){
     edge->data = node;
-    printf("replace [%u][%c] = %u\n", getNodeIndex(sem, p), c, getNodeIndex(sem, node));
+    printf("replace [%u][%c] = %u\n", getNodeIndex(sam, p), c, getNodeIndex(sam, node));
     p = p->parent;
     if(p == nullptr) return nullptr;
     edge = transfer(p, c);
@@ -53,89 +36,64 @@ PNode replaceRightPath(Sem* sem, PNode p, PNode e, PNode node, char c){
   return p;
 }
 
-void insertClone(Sem* sem, PNode p, PNode q, PNode newNode, char c){
-  PNode extraNode = alloc(&sem->nodes);
+void insertClone(Sam* sam, PNode p, PNode q, PNode newNode, char c){
+  PNode extraNode = alloc(&sam->nodes);
 
   extraNode->parent = q->parent;
   q->parent = extraNode;
   newNode->parent = extraNode;
 
+  extraNode->transit = q->transit;
   extraNode->len = p->len + 1;
-  extraNode->edges = copyList(&sem->edges, q->edges);
-  printf("copy %u <- %u\n", getNodeIndex(sem, extraNode), getNodeIndex(sem, q));
+  extraNode->edges = copyList(&sam->edges, q->edges);
+  printf("copy %u <- %u\n", getNodeIndex(sam, extraNode), getNodeIndex(sam, q));
 
-  replaceRightPath(sem, p, q, extraNode, c);
+  replaceRightPath(sam, p, q, extraNode, c);
 }
 
-void insert(Sem* sem, char c){
-  PNode newNode = alloc(&sem->nodes);
-  PNode p = sem->lastRealNode;
-  sem->lastRealNode = newNode;
+void insert(Sam* sam, char c){
+  PNode newNode = alloc(&sam->nodes);
+  PNode p = sam->lastRealNode;
+  sam->lastRealNode = newNode;
 
   newNode->transit = c;
   newNode->edges = nullptr;
   newNode->len = p->len+1;
 
-  p = insertRightPath(sem, p, newNode, c);
+  p = insertRightPath(sam, p, newNode, c);
 
   if(p == nullptr){
-    newNode->parent = sem->nodes.mem;
+    newNode->parent = sam->nodes.mem;
     return;
   }
   PNode q = transfer(p, c)->data;
   if(p->len + 1 == q->len){
     newNode->parent = q;
   } else {
-    insertClone(sem, p, q, newNode, c);
+    insertClone(sam, p, q, newNode, c);
   }
 }
 
-Sem newSem(unsigned length){
+Sam newSam(unsigned length){
   PNode nodeMem = (PNode)malloc(2 * length * sizeof(Node));
   PEdge edgeMem = (PEdge)malloc(3 * length * sizeof(List<PNode>));
 
-  Sem sem = { {nodeMem, 0}, {edgeMem, 0}, nodeMem };
-  PNode star = alloc(&sem.nodes);
+  Sam sam = { {nodeMem, 0}, {edgeMem, 0}, nodeMem };
+  PNode star = alloc(&sam.nodes);
   star->edges = nullptr;
   star->len = 0;
   star->parent = nullptr;
-  return sem;
+  return sam;
 }
 
-Sem build(char* s){
+Sam buildSam(char* s){
   unsigned length = strlen(s);
-  Sem sem = newSem(length);
+  Sam sam = newSam(length);
  
   for(unsigned i=0;i<length;i++){
     printf("insert %c\n", s[i]);
-    insert(&sem, s[i]);
+    insert(&sam, s[i]);
     puts("\0");
   }
-  return sem;
-}
-
-void querySubString(PNode state, char* str, unsigned len, bool ignoreLower, bool ignoreUpper){
-  if(len == 0) printf("succ %p\n", state);
-
-  char c = str[0];
-
-  PEdge edge = transfer(state, c);
-  if(edge) querySubString(edge->data, str+1, len-1, ignoreLower, ignoreUpper);
-
-  if(islower(c) && ignoreLower){
-    PEdge edge = transfer(state, c-'a'+'A');
-    if(edge) querySubString(edge->data, str+1, len-1, ignoreLower, ignoreUpper);
-  } 
-
-  if(isupper(c) && ignoreUpper) {
-    PEdge edge = transfer(state, c-'A'+'a');
-    if(edge) querySubString(edge->data, str+1, len-1, ignoreLower, ignoreUpper);
-  }
-}
-
-int main(){
-  char str[] = "abaabAa";
-  Sem sem = build(str);
-  querySubString(&sem.nodes.mem[0], "aba", 3, true, true);
-  return 0;
+  return sam;
 }
