@@ -32,40 +32,43 @@ Automaton packSam(Sam* sam){
   auto edgeBuffer = &pack.edgeBuffer;
 
   for(unsigned i = 0; i < sam->nodes.size; i++){
-    PNode node0 = sam->nodes.mem + i;
+    Node node0 = sam->nodes.mem[i];
     auto node1 = alloc(&pack.nodes);
-    node1->transit = node0->transit;
-    node1->edges = pushEdge(sam, edgeBuffer, node0->edges);
+    node1->transit = node0.transit;
+    node1->edges = pushEdge(sam, edgeBuffer, node0.edges);
   }
   return pack;
 }
 
 void printAutomaton(Automaton* am){
   for(unsigned i = 0; i < am->nodes.size; i++){
-    AmNode* node = am->nodes.mem + i;
-    for(unsigned k = 0; k < node->edges.size; k++){
-      unsigned destIndex = node->edges.mem[k];
-      AmNode* dest = am->nodes.mem + destIndex;
-      printf("[%u][%c] -> %u\n", i, dest->transit, destIndex);
+    AmNode node = am->nodes.mem[i];
+    for(unsigned k = 0; k < node.edges.size; k++){
+      unsigned destIndex = node.edges.mem[k];
+      AmNode dest = am->nodes.mem[destIndex];
+      printf("[%u][%c] -> %u\n", i, dest.transit, destIndex);
     }
   }
 }
 
 unsigned transfer(Automaton* am, unsigned state, char c){
-  AmNode* node = am->nodes.mem + state;
-  auto pred = [am, c](unsigned k){
-    return am->nodes.mem[k].transit == c;
+  AmNode node = am->nodes.mem[state];
+  auto cmp = [am](unsigned x, char c){
+    return am->nodes.mem[x].transit < c;
   };
-  unsigned* last = node->edges.mem + node->edges.size;
-  unsigned* r = std::find_if(node->edges.mem, last, pred);
-  return r == last ? -1u : *r;
+ 
+  unsigned* last = node.edges.mem + node.edges.size;
+  unsigned* r = std::lower_bound(node.edges.mem, last, c, cmp);
+
+  bool eq = r != last && am->nodes.mem[*r].transit == c;
+  return eq ? *r : -1u;
 }
 
 void querySubString(Automaton* am, unsigned state, char* str, bool ignoreLower, bool ignoreUpper){
   if(state == -1u) return;
 
   char c = str[0];
-  if(c == 0) {
+  if(c == '\0') {
     printf("succ %u\n", state);
     return;
   }
